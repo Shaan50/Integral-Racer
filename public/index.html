@@ -122,10 +122,13 @@
             filter: brightness(50%);
         }
     </style>
-    <!-- Include math.js library -->
+    <!-- Include math.js and Socket.io library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/13.0.3/math.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
+
+
     <div class="top-half">
         <div class="top-left">
             <div class="timer">
@@ -164,10 +167,11 @@
         <div id="countdown-text">3</div>
     </div>
     <script>
+        const socket = io();
+
         let countdownTime = 3 * 60; // 3 minutes in seconds
         let countdownInterval;
         let currentIntegralIndex = 0;
-        let correctAnswers = [];
 
         function resetTimer() {
             countdownTime = 3 * 60; // Reset to 3 minutes
@@ -241,6 +245,9 @@
             const inputValue = document.getElementById('submit-textbox').value;
             const playerAnswer = inputValue.trim();
 
+            // Emit answer to the server
+            socket.emit('submitAnswer', playerAnswer);
+
             fetch('integral_answers.txt')
                 .then(response => response.text())
                 .then(data => {
@@ -292,12 +299,6 @@
                 const playerValue = playerExpr.evaluate({ x });
                 const correctValue = correctExpr.evaluate({ x });
 
-                console.log("PLAYER:",playerValue)
-                console.log("ANSWER:",correctValue)
-                if (Math.abs(math.re(playerValue))===Infinity && Math.abs(math.re(correctValue))===Infinity){
-                    return true;
-                }
-
                 return Math.abs(math.re(playerValue) - math.re(correctValue)) < 0.0001 && Math.abs(math.im(playerValue) - math.im(correctValue)) < 0.0001;
             });
         }
@@ -325,6 +326,7 @@
         whiteboard.width = whiteboard.offsetWidth;
         whiteboard.height = 10000; // Initial height for scrolling
 
+        // Handle drawing on the whiteboard
         whiteboard.addEventListener('mousedown', (e) => {
             drawing = true;
             ctx.beginPath();
@@ -337,6 +339,9 @@
                 ctx.strokeStyle = eraserMode ? '#fff' : '#000';
                 ctx.lineWidth = fontSize;
                 ctx.stroke();
+
+                // Emit drawing data to the server
+                socket.emit('draw', whiteboard.toDataURL());
             }
         });
 
@@ -351,6 +356,9 @@
 
         document.getElementById('clear-button').addEventListener('click', () => {
             ctx.clearRect(0, 0, whiteboard.width, whiteboard.height);
+
+            // Emit clear event to the server
+            socket.emit('clear');
         });
 
         document.getElementById('font-size').addEventListener('change', (e) => {
@@ -363,10 +371,32 @@
             ctx.putImageData(imageData, 0, 0);
         });
 
+        // Socket.io events
+        socket.on('integral', (data) => {
+            currentIntegralIndex = data.index;
+            document.getElementById('integral-image').src = `integral${currentIntegralIndex + 1}.jpg`;
+            resetTimer(); // Reset timer when integral changes
+            startCountdownOverlay(); // Start countdown overlay
+        });
+
+        socket.on('draw', (dataURL) => {
+            const img = new Image();
+            img.onload = () => {
+                ctx.clearRect(0, 0, whiteboard.width, whiteboard.height);
+                ctx.drawImage(img, 0, 0);
+            };
+            img.src = dataURL;
+        });
+
+        socket.on('clear', () => {
+            ctx.clearRect(0, 0, whiteboard.width, whiteboard.height);
+        });
+
+        // Initialize on page load
+        fetchAnswers(); // Load answers on page load
+
         document.getElementById('submit-button').addEventListener('click', handleSubmitButtonClick);
         document.getElementById('enter-button').addEventListener('click', handleEnterButtonClick);
-
-        fetchAnswers(); // Load answers on page load
     </script>
 </body>
 </html>
