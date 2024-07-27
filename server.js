@@ -7,37 +7,68 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-const PORT = 3000;
-let currentIntegralIndex = 0;
+app.use(express.static(path.join(__dirname, 'public')));
 
-app.use(express.static(path.join(__dirname, 'public'))); // Serve static files from 'public'
+let games = {}; // Store game states
+let playerSockets = {}; // Map to store socket ids for players
 
 io.on('connection', (socket) => {
     console.log('A user connected');
 
-    // Send the current integral to the new client
-    socket.emit('integral', { index: currentIntegralIndex });
-
-    socket.on('submitAnswer', (answer) => {
-        // Broadcast answer to all clients
-        io.emit('submitAnswer', answer);
+    // Create new game
+    socket.on('createGame', () => {
+        const gameId = generateGameId();
+        games[gameId] = { players: [socket.id], state: {} };
+        playerSockets[socket.id] = gameId;
+        socket.emit('gameCreated', gameId);
+        console.log(`Game created: ${gameId}`);
     });
 
-    socket.on('draw', (dataURL) => {
-        // Broadcast drawing data to all clients
-        socket.broadcast.emit('draw', dataURL);
+    // Join existing game
+    socket.on('joinGame', (gameId) => {
+        if (games[gameId] && games[gameId].players.length < 2) {
+            games[gameId].players.push(socket.id);
+            playerSockets[socket.id] = gameId;
+            io.to(games[gameId].players[0]).emit('playerJoined'); // Notify first player
+            socket.emit('gameJoined', gameId);
+            console.log(`Player joined game: ${gameId}`);
+        } else {
+            socket.emit('error', 'Game is full or does not exist');
+        }
     });
 
-    socket.on('clear', () => {
-        // Broadcast clear event to all clients
-        socket.broadcast.emit('clear');
-    });
-
+    // Handle disconnection
     socket.on('disconnect', () => {
-        console.log('A user disconnected');
+        const gameId = playerSockets[socket.id];
+        if (gameId && games[gameId]) {
+            games[gameId].players = games[gameId].players.filter(id => id !== socket.id);
+            if (games[gameId].players.length === 0) {
+                delete games[gameId];
+            } else {
+                io.to(games[gameId].players[0]).emit('playerLeft');
+            }
+            delete playerSockets[socket.id];
+        }
+        console.log('User disconnected');
     });
 });
 
-server.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+// Route to fetch player list for a game
+app.get('/players', (req, res) => {
+    const gameId = req.query.gameId;
+    if (games[gameId]) {
+        const playerIds = games[gameId].players;
+        const playerNames = playerIds.map(id => io.sockets.sockets.get(id).handshake.query.username || 'Unknown');
+        res.json(playerNames);
+    } else {
+        res.status(404).json([]);
+    }
+});
+
+function generateGameId() {
+    return Math.random().toString(36).substring(2, 7).toUpperCase(); // Generate random 5 character game ID
+}
+
+server.listen(3000, () => {
+    console.log('Server is running on port 3000');
 });

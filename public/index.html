@@ -128,7 +128,6 @@
 </head>
 <body>
 
-
     <div class="top-half">
         <div class="top-left">
             <div class="timer">
@@ -145,6 +144,7 @@
                 <button id="enter-button">Enter</button>
             </div>
         </div>
+    </div>
     </div>
     <div class="bottom-half">
         <div class="toolbar">
@@ -166,8 +166,78 @@
     <div id="countdown-overlay">
         <div id="countdown-text">3</div>
     </div>
+    <div id="game-setup">
+        <button id="create-game">Create New Game</button>
+        <input type="text" id="game-id" placeholder="Enter Game ID to Join">
+        <button id="join-game">Join Game</button>
+    </div>
+    <div id="player-list">
+        <h2>Players</h2>
+        <ul id="players"></ul>
+    </div>
     <script>
         const socket = io();
+
+        // Create new game
+        document.getElementById('create-game').addEventListener('click', () => {
+            socket.emit('createGame');
+        });
+
+        // Join existing game
+        document.getElementById('join-game').addEventListener('click', () => {
+            const gameId = document.getElementById('game-id').value;
+            socket.emit('joinGame', gameId);
+        });
+
+        // Handle game creation response
+        socket.on('gameCreated', (gameId) => {
+            alert(`Game created! Your game ID is: ${gameId}`);
+            document.getElementById('game-id').value = ''; // Clear the input field
+            updatePlayerList(); // Update the player list
+        });
+
+        // Handle game joining response
+        socket.on('gameJoined', (gameId) => {
+            alert(`Joined game: ${gameId}`);
+            document.getElementById('game-id').value = ''; // Clear the input field
+            updatePlayerList(); // Update the player list
+        });
+
+        // Handle errors
+        socket.on('error', (message) => {
+            alert(message);
+        });
+
+        // Notify when a player joins
+        socket.on('playerJoined', () => {
+            alert('Another player has joined the game!');
+            updatePlayerList(); // Update the player list
+        });
+
+        // Notify when a player leaves
+        socket.on('playerLeft', () => {
+            alert('A player has left the game.');
+            updatePlayerList(); // Update the player list
+        });
+
+        // Function to update the player list
+        function updatePlayerList() {
+            const gameId = document.getElementById('game-id').value;
+            if (gameId) {
+                fetch(`/players?gameId=${gameId}`)
+                    .then(response => response.json())
+                    .then(players => {
+                        const playersList = document.getElementById('players');
+                        playersList.innerHTML = ''; // Clear current list
+                        players.forEach(player => {
+                            const listItem = document.createElement('li');
+                            listItem.textContent = player;
+                            playersList.appendChild(listItem);
+                        });
+                    })
+                    .catch(error => console.error('Error fetching player list:', error));
+            }
+        }
 
         let countdownTime = 3 * 60; // 3 minutes in seconds
         let countdownInterval;
@@ -398,5 +468,8 @@
         document.getElementById('submit-button').addEventListener('click', handleSubmitButtonClick);
         document.getElementById('enter-button').addEventListener('click', handleEnterButtonClick);
     </script>
+
+    <script src="multiplayer.js"></script> <!-- Add this line -->
+
 </body>
 </html>
