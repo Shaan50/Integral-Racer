@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integral Racer</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        .top-half {
+            display: flex;
+            height: 10%;
+            position: relative;
+        }
+        .top-left {
+            width: 150px;
+            height: 95px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+        .top-middle {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .top-right {
+            width: 200px;
+            height: 95px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        #submit-button {
+            font-size: 1.5em;
+            padding: 10px 20px;
+        }
+        .bottom-half {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+            overflow-y: auto;
+            position: relative;
+        }
+        .timer {
+            background: #fff;
+            padding: 5px 10px;
+            border-radius: 5px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        #countdown {
+            font-size: 1.5em;
+            color: #333;
+        }
+        .whiteboard {
+            position: relative;
+            width: 100%;
+            cursor: crosshair;
+        }
+        .toolbar {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 10;
+            display: flex;
+            gap: 10px;
+        }
+        .toolbar button {
+            font-size: 1em;
+            padding: 5px 10px;
+        }
+        .font-size-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .font-size-container select {
+            margin-top: 5px;
+        }
+        .input-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 10px;
+        }
+        #enter-button {
+            margin-top: 5px;
+        }
+        #countdown-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            color: red; /* Countdown text color */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 3em;
+            z-index: 100;
+            visibility: hidden;
+        }
+        #countdown-text {
+            color: red; /* Countdown text color */
+        }
+        .dimmed {
+            filter: brightness(50%);
+        }
+    </style>
+    <!-- Include math.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/13.0.3/math.js"></script>
+</head>
+<body>
+    <div class="top-half">
+        <div class="top-left">
+            <div class="timer">
+                <h1 id="countdown">03:00</h1>
+            </div>
+        </div>
+        <div class="top-middle">
+            <img id="integral-image" src="integral1.jpg" alt="Integral" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+        </div>
+        <div class="top-right">
+            <button id="submit-button">Submit</button>
+            <div class="input-container" style="display: none;">
+                <input type="text" id="submit-textbox" placeholder="Type here...">
+                <button id="enter-button">Enter</button>
+            </div>
+        </div>
+    </div>
+    <div class="bottom-half">
+        <div class="toolbar">
+            <button id="eraser-button">Eraser</button>
+            <button id="clear-button">Clear All</button>
+            <div class="font-size-container">
+                <label for="font-size">Font Size</label>
+                <select id="font-size">
+                    <option value="2">Small</option>
+                    <option value="5">Medium</option>
+                    <option value="10">Large</option>
+                </select>
+            </div>
+        </div>
+        <div class="whiteboard-container">
+            <canvas class="whiteboard" id="whiteboard"></canvas>
+        </div>
+    </div>
+    <div id="countdown-overlay">
+        <div id="countdown-text">3</div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+
+
+    <script>
+
+        const socket = io();
+        
+        let countdownTime = 3 * 60; // 3 minutes in seconds
+        let countdownInterval;
+        let currentIntegralIndex = 0;
+        let correctAnswers = [];
+
+        function resetTimer() {
+            countdownTime = 3 * 60; // Reset to 3 minutes
+            document.getElementById('countdown').innerText = '03:00';
+            clearInterval(countdownInterval);
+            countdownInterval = setInterval(updateCountdown, 1000);
+        }
+
+        function startCountdownOverlay() {
+            const overlay = document.getElementById('countdown-overlay');
+            const countdownText = document.getElementById('countdown-text');
+            let countdownNumber = 3;
+
+            overlay.style.visibility = 'visible';
+            overlay.classList.add('dimmed');
+            countdownText.innerText = countdownNumber;
+
+            const countdownInterval = setInterval(() => {
+                countdownNumber--;
+                countdownText.innerText = countdownNumber;
+
+                if (countdownNumber <= 0) {
+                    clearInterval(countdownInterval);
+                    overlay.style.visibility = 'hidden';
+                    overlay.classList.remove('dimmed');
+                    showSubmitButton();
+                }
+            }, 1000);
+        }
+
+        function updateCountdown() {
+            let minutes = Math.floor(countdownTime / 60);
+            let seconds = countdownTime % 60;
+
+            minutes = minutes < 10 ? '0' + minutes : minutes;
+            seconds = seconds < 10 ? '0' + seconds : seconds;
+
+            document.getElementById('countdown').innerText = minutes + ':' + seconds;
+            countdownTime--;
+
+            if (countdownTime < 0) {
+                clearInterval(countdownInterval);
+                document.getElementById('countdown').innerText = 'Time\'s up!';
+            }
+        }
+
+        function showSubmitButton() {
+            const submitButton = document.getElementById('submit-button');
+            const inputContainer = document.querySelector('.input-container');
+            const enterButton = document.getElementById('enter-button');
+            if (submitButton) {
+                inputContainer.style.display = 'none';
+                enterButton.style.display = 'none';
+                submitButton.style.display = 'block';
+                submitButton.addEventListener('click', handleSubmitButtonClick);
+            }
+        }
+
+        function handleSubmitButtonClick() {
+            const submitButton = document.getElementById('submit-button');
+            const inputContainer = document.querySelector('.input-container');
+            if (submitButton) {
+                inputContainer.style.display = 'flex';
+                document.getElementById('submit-textbox').focus();
+                document.getElementById('enter-button').style.display = 'block';
+                submitButton.style.display = 'none'; // Hide submit button after it is clicked
+            }
+        }
+
+        function handleEnterButtonClick() {
+            const inputValue = document.getElementById('submit-textbox').value;
+            const playerAnswer = inputValue.trim();
+
+            fetch('integral_answers.txt')
+                .then(response => response.text())
+                .then(data => {
+                    const answers = data.trim().split('\n');
+                    const correctAnswer = answers[currentIntegralIndex].trim();
+                    const isCorrect = checkAnswer(playerAnswer, correctAnswer);
+
+                    if (isCorrect) {
+                        alert('Correct Answer!');
+                        currentIntegralIndex=Math.floor(Math.random()*19);
+
+                        if (currentIntegralIndex < answers.length) {
+                            document.getElementById('integral-image').src = 'integral' + (currentIntegralIndex + 1) + '.jpg';
+                            resetTimer(); // Reset timer after correct answer
+                            startCountdownOverlay(); // Start countdown overlay
+                        } else {
+                            alert('Congratulations! You completed all integrals.');
+                        }
+                    } else {
+                        alert('Incorrect Answer. Try again!');
+                        showSubmitButton(); // Show submit button for retrying
+                    }
+
+                    document.getElementById('submit-textbox').value = ''; // Clear input field
+                })
+                .catch(error => console.error('Error fetching answers:', error));
+        }
+
+        function checkAnswer(playerAnswer, correctAnswer) {
+            const parseExpression = (expr) => {
+                try {
+                    return math.parse(expr).compile(); // Using math.js to compile the expression
+                } catch (e) {
+                    console.error('Error parsing expression:', e);
+                    return null;
+                }
+            };
+
+            const playerExpr = parseExpression(playerAnswer);
+            const correctExpr = parseExpression(correctAnswer);
+
+            if (playerExpr === null || correctExpr === null) {
+                return false;
+            }
+
+            const xValues = Array.from({ length: 10 }, () => Math.random() * 1 + 0); // Generate 10 random values between 0 and 1
+
+            return xValues.every(x => {
+                const playerValue = playerExpr.evaluate({ x });
+                const correctValue = correctExpr.evaluate({ x });
+
+                console.log("PLAYER:",playerValue)
+                console.log("ANSWER:",correctValue)
+                if (Math.abs(math.re(playerValue))===Infinity && Math.abs(math.re(correctValue))===Infinity){
+                    return true;
+                }
+
+                return Math.abs(math.re(playerValue) - math.re(correctValue)) < 0.0001 && Math.abs(math.im(playerValue) - math.im(correctValue)) < 0.0001;
+            });
+        }
+
+        function fetchAnswers() {
+            fetch('integral_answers.txt')
+                .then(response => response.text())
+                .then(data => {
+                    correctAnswers = data.trim().split('\n');
+                    if (correctAnswers.length > 0) {
+                        document.getElementById('integral-image').src = 'integral1.jpg';
+                        resetTimer(); // Initialize timer on first load
+                        startCountdownOverlay(); // Start countdown overlay
+                    }
+                })
+                .catch(error => console.error('Error fetching answers:', error));
+        }
+
+        let drawing = false;
+        let eraserMode = false;
+        let fontSize = 2;
+
+        const whiteboard = document.getElementById('whiteboard');
+        const ctx = whiteboard.getContext('2d');
+        whiteboard.width = whiteboard.offsetWidth;
+        whiteboard.height = 10000; // Initial height for scrolling
+
+        whiteboard.addEventListener('mousedown', (e) => {
+            drawing = true;
+            ctx.beginPath();
+            ctx.moveTo(e.offsetX, e.offsetY);
+        });
+
+        whiteboard.addEventListener('mousemove', (e) => {
+            if (drawing) {
+                ctx.lineTo(e.offsetX, e.offsetY);
+                ctx.strokeStyle = eraserMode ? '#fff' : '#000';
+                ctx.lineWidth = fontSize;
+                ctx.stroke();
+            }
+        });
+
+        whiteboard.addEventListener('mouseup', () => {
+            drawing = false;
+        });
+
+        document.getElementById('eraser-button').addEventListener('click', () => {
+            eraserMode = !eraserMode;
+            document.getElementById('eraser-button').innerText = eraserMode ? 'Draw' : 'Eraser';
+        });
+
+        document.getElementById('clear-button').addEventListener('click', () => {
+            ctx.clearRect(0, 0, whiteboard.width, whiteboard.height);
+        });
+
+        document.getElementById('font-size').addEventListener('change', (e) => {
+            fontSize = parseInt(e.target.value);
+        });
+
+        window.addEventListener('resize', () => {
+            const imageData = ctx.getImageData(0, 0, whiteboard.width, whiteboard.height);
+            whiteboard.width = whiteboard.offsetWidth;
+            ctx.putImageData(imageData, 0, 0);
+        });
+
+        document.getElementById('submit-button').addEventListener('click', handleSubmitButtonClick);
+        document.getElementById('enter-button').addEventListener('click', handleEnterButtonClick);
+
+        fetchAnswers(); // Load answers on page load
+    </script>
+</body>
+</html>
