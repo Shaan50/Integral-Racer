@@ -162,7 +162,10 @@
         // Redirect to gameplay.html when "Start Game" is clicked
         document.getElementById('start-game').addEventListener('click', () => {
             const gameId = document.getElementById('game-id').value;
+            console.log("CLICKED")
+            console.log("GAME ID:",gameID)
             if (gameId) {
+                console.log("IUH")
                 socket.emit('startGame', gameId);
             }
         });

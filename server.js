@@ -55,7 +55,7 @@ io.on('connection', (socket) => {
         if (games[gameId] && games[gameId].players.length < 2) {
             games[gameId].players.push(socket.id);
             playerSockets[socket.id] = gameId;
-            io.to(games[gameId].players[0]).emit('playerJoined'); // Notify first player
+            io.to(games[gameId].players[0]).emit('playerJoined',playerNicknames[socket.id]); // Notify first player
             socket.emit('gameJoined', gameId);
             console.log(`Player joined game: ${gameId}`);
 
@@ -67,6 +67,18 @@ io.on('connection', (socket) => {
             io.to(games[gameId].players[1]).emit('scoreUpdated', playerScores);
         } else {
             socket.emit('error', 'Game is full or does not exist');
+        }
+    });
+
+    // New: Handle the startGame event
+    socket.on('startGame', (id) => {
+        console.log("P")
+        if (games[id]) {
+            // Notify all players in the game that the game is starting
+            console.log("ENTERBJHAGDHJASGDTYHGASFDHYSAD")
+            io.to(id).emit('gameStarted');
+        } else {
+            socket.emit('error', 'Game not found');
         }
     });
 
@@ -100,7 +112,7 @@ io.on('connection', (socket) => {
             if (games[gameId].players.length === 0) {
                 delete games[gameId];
             } else {
-                io.to(games[gameId].players[0]).emit('playerLeft');
+                io.to(games[gameId].players[0]).emit('playerLeft',playerNicknames[socket.id]);
             }
             delete playerSockets[socket.id];
         }
