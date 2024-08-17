@@ -9,16 +9,42 @@ const io = socketIo(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 let games = {}; // Store game states
 let playerSockets = {}; // Map to store socket ids for players
+let playerNicknames = {}; // Store player nicknames
+let playerScores = {}; // Store player scores
+
+const players = {}; // Example structure for holding players by game ID
+
+// Endpoint to get players for a specific game
+app.get('/players', (req, res) => {
+    const gameId = req.query.gameId;
+    if (games[gameId]) {
+        res.json(Object.values(games[gameId].players));
+    } else {
+        res.status(404).json({ error: 'Game not found' });
+    }
+});
 
 io.on('connection', (socket) => {
     console.log('A user connected');
 
+    // Handle nickname setting
+    socket.on('setNickname', (nickname) => {
+        playerNicknames[socket.id] = nickname;
+        // Initialize player scores
+        playerScores[socket.id] = 0;
+    });
+
     // Create new game
     socket.on('createGame', () => {
+        console.log("SDKF")
         const gameId = generateGameId();
-        games[gameId] = { players: [socket.id], state: {} };
+        games[gameId] = { players: [socket.id], state: { integralIndex: 0 } };
         playerSockets[socket.id] = gameId;
         socket.emit('gameCreated', gameId);
         console.log(`Game created: ${gameId}`);
@@ -32,8 +58,37 @@ io.on('connection', (socket) => {
             io.to(games[gameId].players[0]).emit('playerJoined'); // Notify first player
             socket.emit('gameJoined', gameId);
             console.log(`Player joined game: ${gameId}`);
+
+            // Send initial game state and scores to both players
+            const integralIndex = games[gameId].state.integralIndex;
+            io.to(games[gameId].players[0]).emit('gameStateUpdated', integralIndex);
+            io.to(games[gameId].players[1]).emit('gameStateUpdated', integralIndex);
+            io.to(games[gameId].players[0]).emit('scoreUpdated', playerScores);
+            io.to(games[gameId].players[1]).emit('scoreUpdated', playerScores);
         } else {
             socket.emit('error', 'Game is full or does not exist');
+        }
+    });
+
+    // Handle integral answer and score updates
+    socket.on('answerCorrect', () => {
+        const gameId = playerSockets[socket.id];
+        if (games[gameId]) {
+            const players = games[gameId].players;
+            const otherPlayer = players.find(id => id !== socket.id);
+            if (otherPlayer) {
+                // Update scores
+                playerScores[socket.id]++;
+                io.to(otherPlayer).emit('scoreUpdated', playerScores);
+                io.to(socket.id).emit('scoreUpdated', playerScores);
+                
+                // Update integral
+                games[gameId].state.integralIndex = (games[gameId].state.integralIndex + 1) % 20; // Example for 20 integrals
+                const newIntegralIndex = games[gameId].state.integralIndex;
+                
+                io.to(players[0]).emit('gameStateUpdated', newIntegralIndex);
+                io.to(players[1]).emit('gameStateUpdated', newIntegralIndex);
+            }
         }
     });
 
@@ -51,18 +106,6 @@ io.on('connection', (socket) => {
         }
         console.log('User disconnected');
     });
-});
-
-// Route to fetch player list for a game
-app.get('/players', (req, res) => {
-    const gameId = req.query.gameId;
-    if (games[gameId]) {
-        const playerIds = games[gameId].players;
-        const playerNames = playerIds.map(id => io.sockets.sockets.get(id).handshake.query.username || 'Unknown');
-        res.json(playerNames);
-    } else {
-        res.status(404).json([]);
-    }
 });
 
 function generateGameId() {

@@ -6,9 +6,21 @@ if (gameId) {
 
     // Handle receiving answers
     socket.on('receiveAnswer', (data) => {
-        // Implement logic to handle the received answer
         console.log('Received answer from another player:', data);
-        // For example, you might check if the answer is correct and update the game state
+        // For example, check if the answer is correct and update the game state
+    });
+
+    // Handle integral state updates
+    socket.on('integral', (data) => {
+        const integralIndex = data.index;
+        document.getElementById('integral-image').src = `integral${integralIndex + 1}.jpg`;
+        resetTimer();
+        startCountdownOverlay();
+    });
+
+    // Handle score update
+    socket.on('scoreUpdated', (playerScores) => {
+        updateScore(playerScores);
     });
 
     // Handle player list updates
