@@ -78,6 +78,7 @@
     </div>
 
     <script>
+        var gameId;
         // Initialize socket connection
         const socket = io();
 
@@ -93,17 +94,20 @@
 
         // Create new game
         document.getElementById('create-game').addEventListener('click', () => {
+            console.log("Goes here0")
             socket.emit('createGame');
         });
 
         // Join existing game
         document.getElementById('join-game').addEventListener('click', () => {
-            const gameId = document.getElementById('game-id').value;
+            console.log("Goes here")
+            gameId = document.getElementById('game-id').value;
             socket.emit('joinGame', gameId);
         });
 
         // Handle game creation response
-        socket.on('gameCreated', (gameId) => {
+        socket.on('gameCreated', (gId) => {
+            gameId=gId;
             alert(`Game created! Your game ID is: ${gameId}`);
             document.getElementById('game-id').value = ''; // Clear the input field
             updatePlayerList(); // Update the player list
@@ -135,7 +139,7 @@
 
         // Update player list
         function updatePlayerList() {
-            const gameId = document.getElementById('game-id').value;
+            //const gameId = document.getElementById('game-id').value;
             console.log(gameId)
             console.log(gameId)
             if (gameId) {
@@ -161,17 +165,18 @@
 
         // Redirect to gameplay.html when "Start Game" is clicked
         document.getElementById('start-game').addEventListener('click', () => {
-            const gameId = document.getElementById('game-id').value;
+            //const gameId = document.getElementById('game-id').value;
             console.log("CLICKED")
-            console.log("GAME ID:",gameID)
+            console.log("GAME ID:",gameId)
             if (gameId) {
                 console.log("IUH")
-                socket.emit('startGame', gameId);
+                socket.emit('gameStarted');
             }
         });
 
         // Redirect to gameplay.html for all players
         socket.on('gameStarted', () => {
+            console.log("SDFFSIDFDSHFSDHJKFKSDFSDKFKSDF");
             window.location.href = 'gameplay.html';
         });
 

@@ -72,10 +72,10 @@ io.on('connection', (socket) => {
 
     // New: Handle the startGame event
     socket.on('startGame', (id) => {
-        console.log("P")
+        console.log("P");
         if (games[id]) {
             // Notify all players in the game that the game is starting
-            console.log("ENTERBJHAGDHJASGDTYHGASFDHYSAD")
+            console.log("ENTERBJHAGDHJASGDTYHGASFDHYSAD");
             io.to(id).emit('gameStarted');
         } else {
             socket.emit('error', 'Game not found');
